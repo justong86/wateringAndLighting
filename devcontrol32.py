@@ -11,44 +11,41 @@ import ntptime
 
 class EspDev:
     # mode = esp8266 或者mode = esp32
-    def __init__(self, mode='esp8266'):
-        if mode == 'esp8266':
+    def __init__(self, mode='esp32'):
+        if mode == 'esp32':
             # 时钟初始化
             self.rtc = RTC()
             # 光敏传感器
             # 需要接1-4线，1vcc 4gnd 2scl（D1） 1sda（D2）
-            self.i2c = I2C(scl=Pin(5), sda=Pin(4))
+            self.i2c = I2C(scl=Pin(23), sda=Pin(22))
             # 水位传感器 （土壤湿度传感器也可用）
             # water sensor A0
-            self.adc = ADC(0)
+            self.adc = ADC(Pin(36))
+            # self.adc = ADC(Pin(39))
             # 土壤湿度传感器
             # D9（GPIO3）
-            self.moisture = Pin(16, Pin.IN)
+            self.moisture = Pin(21, Pin.IN)
             self.online = False
             self.water_level = 0
             self.light_level = 0
             self.soil_moisture_status = "wet"
             self.GPIO_MAPPING = {
-                'D0': 16,  # D0 GPIO16
-                'D4': 2,  # D4 GPIO2
-                'D5': 14,  # D5 GPIO14
-                'D6': 12,  # D6 GPIO12
-                'D7': 13,  # D7 GPIO13
-                'D8': 15,  # D8 GPIO15
-                'D9': 3,  # D9(RX) GPIO3
-                'D10': 1,  # D10(TX) GPIO1
+                'P2': 2,  # P2 GPIO2
+                'P19': 19,  # P19 GPIO19
+                'P18': 18,  # P18 GPIO18
+                'P17': 17,  # P17 GPIO17
+                'P16': 16,  # P16 GPIO16
+                'P36': 36,
             }
 
             # 初始状态皆为高电平状态（关灯）
             self.gpio_state = {
-                'D0': 1,
-                'D4': 0,  # pin为读取，低电平
-                'D5': 1,
-                'D6': 1,
-                'D7': 1,
-                'D8': 0,
-                'D9': 1,
-                'D10': 1,
+                'P2': 1,
+                'P19': 1,
+                'P18': 1,
+                'P17': 1,
+                'P16': 1,
+                'P36': 0,
             }
         else:
             raise NameError("mode={}".format(mode))
@@ -60,21 +57,25 @@ class EspDev:
     def monitor_water_level(self):
         value = self.adc.read()  # 读取ADC数值 ，浸入水后数值基本在500-600.400以下不敏感
         self.water_level = value
-        print(value)
+        print("water_level:%s" % value)
         return value
 
     # 光敏传感器
     def monitor_light_level(self):
-        value = bh1750fvi.sample(self.i2c)
+        try:
+            value = bh1750fvi.sample(self.i2c)
+        except Exception as e:
+            value = 0
+            print("ERROR:bh1750fvi is not found:%s" % e)
         self.light_level = value
-        print(value)  # 读取值0-54613
+        print("light level:%s" % value)  # 读取值0-54613
         return value
 
     # 土壤湿度传感器(2选1)
     # 传感器A0接口，ADC读取模拟值
     def monitor_soil_moisture(self):
         value = self.adc.read()  # 读取ADC数值 ，断开1024，完全浸入水中最低272
-        print(value)
+        print("soil_moisture:%s" % value)
         return value
 
     # 土壤湿度传感器(2选1)
@@ -93,6 +94,7 @@ class EspDev:
         通过ntp服务器同步时间，设备联网后立即同步，之后每12小时同步一次
         :return: 直接作用到设备的RTC
         """
+
         def sync_ntp(tim):
             ntptime.NTP_DELTA = 3155644800
             ntptime.host = 'ntp1.aliyun.com'
@@ -124,23 +126,23 @@ class EspDev:
 
     def led_switch(self, action='on'):
         """
-        led补光灯的开关位于D10（gpio1）
+        led补光灯的开关位于P16（gpio16）
         :param action:‘on’ or 'off'
         :return:
         """
-        self.light_on('D10') if action == 'on' else self.light_off('D10')
+        self.light_on('P16') if action == 'on' else self.light_off('P16')
 
     def get_led_switch(self):
         # 低电平表示开??
-        return 'off' if self.gpio_state['D10'] else 'on'
+        return 'off' if self.gpio_state['P16'] else 'on'
 
     def water_pump(self, action='on'):
         #  同led_switch()
-        self.light_on('D9') if action == 'on' else self.light_off('D9')
+        self.light_on('P17') if action == 'on' else self.light_off('P17')
 
     def get_water_pump(self):
-        # 低电平表示开??
-        return 'off' if self.gpio_state['D9'] else 'on'
+        # 低电平表示开
+        return 'off' if self.gpio_state['P17'] else 'on'
 
     def light_state(self, id):
         return self.gpio_state[id]
@@ -163,7 +165,7 @@ class EspDev:
 
     def wifi_connect(self, ssid, wifipwd):
         # 初始化 WIFI 指示灯
-        WIFI_LED = 'D4'
+        WIFI_LED = 'P2'
         # STA 模式
         wlan = network.WLAN(network.STA_IF)
         # 激活接口
@@ -210,7 +212,7 @@ class EspDev:
 
 if __name__ == '__main__':
     print("espdevcontrol testing")
-    mydev = EspDev("esp8266")
+    mydev = EspDev("esp32")
     mydev.light_on(4, 5)
 
 # from machine import RTC
